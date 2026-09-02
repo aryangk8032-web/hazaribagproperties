@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Property, Lead, FilterState, PropertyType, Purpose, AreaUnit } from '../types/property';
 import { INITIAL_PROPERTIES, INITIAL_LEADS } from '../data/mockProperties';
+import { isSupabaseConfigured } from '../lib/supabase';
+import { createLead as persistLead, createProperty as persistProperty, fetchPublishedProperties } from '../services/propertyRepository';
 
 export type UserRole = 'buyer' | 'seller' | 'admin';
 
@@ -153,6 +155,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [properties]);
 
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+
+    let cancelled = false;
+    fetchPublishedProperties()
+      .then((publishedProperties) => {
+        if (!cancelled && publishedProperties && publishedProperties.length > 0) {
+          setProperties(publishedProperties);
+        }
+      })
+      .catch((error) => console.error('Could not load published properties from Supabase.', error));
+
+    return () => { cancelled = true; };
+  }, []);
+
   // Saved Properties
   const [savedPropertyIds, setSavedPropertyIds] = useState<string[]>(() => {
     if (typeof window !== 'undefined') {
@@ -213,6 +230,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       createdAt: new Date().toISOString()
     };
     setLeads(prev => [newLead, ...prev]);
+    void persistLead(newLead).catch((error) => {
+      console.error('Could not save lead to Supabase.', error);
+      showToast('Inquiry saved on this device; it will be retried when the connection is available.', 'warning');
+    });
     // increment leads count on property
     setProperties(prev => prev.map(p => p.id === newLead.propertyId ? { ...p, leadsCount: (p.leadsCount || 0) + 1 } : p));
   };
@@ -295,6 +316,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     setProperties(prev => [newProperty, ...prev]);
+    void persistProperty(newProperty).catch((error) => {
+      console.error('Could not save property to Supabase.', error);
+      if (isSupabaseConfigured) {
+        showToast(error instanceof Error ? error.message : 'Property saved locally but not yet submitted.', 'warning');
+      }
+    });
     return newProperty;
   };
 
