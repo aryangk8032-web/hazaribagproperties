@@ -1,0 +1,6 @@
+{
+  "name": "Hazaribagh Properties",
+  "description": "The premier digital real estate marketplace for Hazaribagh, Jharkhand. Discover verified plots, independent houses, modern flats, and commercial properties.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
