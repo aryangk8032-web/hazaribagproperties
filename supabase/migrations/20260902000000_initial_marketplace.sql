@@ -38,13 +38,14 @@ alter table public.saved_properties enable row level security;
 -- The browser reads this view, never the base table. In particular, private_data
 -- (phone numbers, documents, and other seller-only information) is not exposed.
 create or replace view public.published_properties
-with (security_invoker = false)
+with (security_invoker = true)
 as
   select id, public_data, featured, created_at
   from public.properties
   where listing_status = 'live';
 
 revoke all on public.properties from anon, authenticated;
+grant select (id, listing_status, featured, public_data, created_at) on public.properties to anon, authenticated;
 grant select on public.published_properties to anon, authenticated;
 grant insert, update on public.properties to authenticated;
 
@@ -57,6 +58,10 @@ grant select, insert, delete on public.saved_properties to authenticated;
 create policy "authenticated users can create their own listings"
   on public.properties for insert to authenticated
   with check (owner_id = (select auth.uid()) and listing_status = 'under_review');
+
+create policy "published properties are publicly readable"
+  on public.properties for select to anon, authenticated
+  using (listing_status = 'live' or owner_id = (select auth.uid()));
 
 create policy "owners can update their own listings"
   on public.properties for update to authenticated
