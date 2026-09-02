@@ -396,7 +396,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const setQuickFilter = (updates: Partial<FilterState>) => {
-    setFilters(prev => ({ ...prev, ...updates }));
+    // Quick links represent a new search preset, so stale filters from a
+    // previous visit (including saved-only mode) must not leak into it.
+    setFilters({ ...DEFAULT_FILTERS, ...updates });
   };
 
   // Modals state

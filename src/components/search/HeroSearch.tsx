@@ -5,7 +5,7 @@ import { HAZARIBAGH_LOCALITIES } from '../../data/localities';
 import { PropertyType, Purpose } from '../../types/property';
 
 export const HeroSearch: React.FC = () => {
-  const { filters, setFilters, navigate } = useApp();
+  const { setQuickFilter, navigate } = useApp();
 
   const [purpose, setPurpose] = useState<Purpose>('buy');
   const [locality, setLocality] = useState<string>('');
@@ -51,31 +51,30 @@ export const HeroSearch: React.FC = () => {
       maxPrice = selectedBudget.max;
     }
 
-    setFilters(prev => ({
-      ...prev,
+    setQuickFilter({
       purpose,
       locality: locality || undefined,
       propertyType: propertyType === 'all' ? 'all' : (propertyType as PropertyType),
       minPrice,
       maxPrice,
       searchQuery: naturalQuery.trim()
-    }));
+    });
 
     navigate('/properties');
   };
 
-  const handleQuickTagClick = (tag: string, loc?: string, type?: PropertyType) => {
+  const handleQuickTagClick = (tag: string, loc?: string, type?: PropertyType, bedrooms?: number) => {
     setNaturalQuery(tag);
     if (loc) setLocality(loc);
     if (type) setPropertyType(type);
     
-    setFilters(prev => ({
-      ...prev,
+    setQuickFilter({
       purpose: 'buy',
       locality: loc || undefined,
       propertyType: type || 'all',
+      bedrooms: bedrooms || 'all',
       searchQuery: tag
-    }));
+    });
     navigate('/properties');
   };
 
@@ -207,7 +206,7 @@ export const HeroSearch: React.FC = () => {
             </button>
             <button
               type="button"
-              onClick={() => handleQuickTagClick('3 BHK in Hurhuru', 'Hurhuru', 'flat')}
+              onClick={() => handleQuickTagClick('3 BHK in Hurhuru', 'Hurhuru', 'flat', 3)}
               className="px-2.5 py-0.5 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10px] font-semibold uppercase tracking-wider transition-colors cursor-pointer"
             >
               Hurhuru Flats

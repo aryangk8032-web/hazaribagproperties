@@ -21,8 +21,21 @@ import { MobileFilterSheet } from '../search/MobileFilterSheet';
 import { InteractiveMapPlaceholder } from '../search/InteractiveMapPlaceholder';
 import { formatIndianPrice } from '../../utils/formatters';
 
+const SEARCH_STOP_WORDS = new Set(['a', 'an', 'and', 'at', 'for', 'in', 'near', 'of', 'the']);
+
+const PROPERTY_TYPE_SEARCH_TERMS: Record<string, string> = {
+  plot: 'plot plots land',
+  flat: 'flat flats apartment apartments',
+  house: 'house houses home homes',
+  villa: 'villa villas house houses',
+  commercial_shop: 'commercial shop shops retail',
+  commercial_office: 'commercial office offices workspace',
+  commercial_land: 'commercial plot plots land',
+  other: 'property properties'
+};
+
 export const PropertiesView: React.FC = () => {
-  const { properties, filters, setFilters, resetFilters, openUnitConverterModal } = useApp();
+  const { properties, savedPropertyIds, filters, setFilters, resetFilters, openUnitConverterModal } = useApp();
   
   const [viewMode, setViewMode] = useState<'grid' | 'list' | 'map' | 'split'>('grid');
   const [isMobileFiltersOpen, setIsMobileFiltersOpen] = useState(false);
@@ -52,7 +65,11 @@ export const PropertiesView: React.FC = () => {
 
       // Bedrooms
       if (filters.bedrooms && filters.bedrooms !== 'all') {
-        if (p.bedrooms !== filters.bedrooms) return false;
+        if (filters.bedrooms === 4) {
+          if (!p.bedrooms || p.bedrooms < 4) return false;
+        } else if (p.bedrooms !== filters.bedrooms) {
+          return false;
+        }
       }
 
       // Furnishing
@@ -73,17 +90,30 @@ export const PropertiesView: React.FC = () => {
       // Verified Only
       if (filters.verifiedOnly && p.verificationStatus !== 'verified') return false;
 
+      // Saved listings
+      if (filters.savedOnly && !savedPropertyIds.includes(p.id)) return false;
+
       // Natural Search query
       if (filters.searchQuery && filters.searchQuery.trim() !== '') {
-        const q = filters.searchQuery.toLowerCase();
-        const matchesTitle = p.title.toLowerCase().includes(q);
-        const matchesLocality = p.locality.toLowerCase().includes(q);
-        const matchesLandmark = p.landmark?.toLowerCase().includes(q) || false;
-        const matchesDesc = p.description.toLowerCase().includes(q);
-        const matchesType = p.propertyType.toLowerCase().includes(q);
-        if (!matchesTitle && !matchesLocality && !matchesLandmark && !matchesDesc && !matchesType) {
-          return false;
-        }
+        const searchTerms = filters.searchQuery
+          .toLowerCase()
+          .replace(/[_-]+/g, ' ')
+          .split(/\s+/)
+          .filter(term => term && !SEARCH_STOP_WORDS.has(term));
+        const searchableText = [
+          p.title,
+          p.locality,
+          p.landmark,
+          p.description,
+          PROPERTY_TYPE_SEARCH_TERMS[p.propertyType],
+          p.bedrooms ? `${p.bedrooms} bhk bedroom bedrooms` : ''
+        ]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase()
+          .replace(/[_-]+/g, ' ');
+
+        if (!searchTerms.every(term => searchableText.includes(term))) return false;
       }
 
       return true;
@@ -97,7 +127,7 @@ export const PropertiesView: React.FC = () => {
       if (!a.featured && b.featured) return 1;
       return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     });
-  }, [properties, filters]);
+  }, [properties, savedPropertyIds, filters]);
 
   // Active filter tags for quick removal
   const activeTags: { key: string; label: string; onRemove: () => void }[] = [];
@@ -125,7 +155,7 @@ export const PropertiesView: React.FC = () => {
   if (filters.bedrooms && filters.bedrooms !== 'all') {
     activeTags.push({
       key: 'bedrooms',
-      label: `${filters.bedrooms} BHK`,
+      label: filters.bedrooms === 4 ? '4+ BHK' : `${filters.bedrooms} BHK`,
       onRemove: () => setFilters(prev => ({ ...prev, bedrooms: 'all' }))
     });
   }
@@ -134,6 +164,13 @@ export const PropertiesView: React.FC = () => {
       key: 'verified',
       label: 'Verified Only',
       onRemove: () => setFilters(prev => ({ ...prev, verifiedOnly: false }))
+    });
+  }
+  if (filters.savedOnly) {
+    activeTags.push({
+      key: 'saved',
+      label: 'Saved Properties',
+      onRemove: () => setFilters(prev => ({ ...prev, savedOnly: false }))
     });
   }
   if (filters.searchQuery) {
@@ -234,7 +271,9 @@ export const PropertiesView: React.FC = () => {
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-lg font-bold text-slate-900">
-            {filters.purpose === 'buy' ? 'Properties for Sale' : 'Properties for Rent'} in Hazaribagh
+            {filters.savedOnly
+              ? 'Saved Properties'
+              : `${filters.purpose === 'buy' ? 'Properties for Sale' : 'Properties for Rent'} in Hazaribagh`}
           </h1>
           <p className="text-xs text-slate-500">
             Showing <strong>{filteredProperties.length}</strong> verified properties

@@ -15,6 +15,14 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
   size = 'md',
   showTagline = true,
 }) => {
+  const gradientIdPrefix = React.useId().replace(/:/g, '');
+  const gradientIds = {
+    primary: `${gradientIdPrefix}-hzGoldPrimary`,
+    highlight: `${gradientIdPrefix}-hzGoldHighlight`,
+    shadow: `${gradientIdPrefix}-hzGoldShadow`,
+    ring: `${gradientIdPrefix}-hzGoldRing`,
+  };
+
   // Size mapping for the icon mark
   const iconSizes = {
     sm: 32,
@@ -26,7 +34,7 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
   const currentIconSize = iconSizes[size];
 
   // Vector SVG of the Hazaribag Properties architectural emblem
-  const LogoMark = ({ customSize }: { customSize?: number }) => {
+  const renderLogoMark = (customSize?: number) => {
     const s = customSize || currentIconSize;
     return (
       <svg
@@ -40,7 +48,7 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
       >
         <defs>
           {/* Rich metallic gold gradient - Primary */}
-          <linearGradient id="hzGoldPrimary" x1="0%" y1="0%" x2="100%" y2="100%">
+          <linearGradient id={gradientIds.primary} x1="0%" y1="0%" x2="100%" y2="100%">
             <stop offset="0%" stopColor="#ECC468" />
             <stop offset="25%" stopColor="#DF9F28" />
             <stop offset="50%" stopColor="#FFEA9F" />
@@ -49,20 +57,20 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
           </linearGradient>
 
           {/* Bright gold shine for highlights */}
-          <linearGradient id="hzGoldHighlight" x1="0%" y1="0%" x2="100%" y2="0%">
+          <linearGradient id={gradientIds.highlight} x1="0%" y1="0%" x2="100%" y2="0%">
             <stop offset="0%" stopColor="#FFF2B2" />
             <stop offset="50%" stopColor="#E5A62D" />
             <stop offset="100%" stopColor="#8C5708" />
           </linearGradient>
 
           {/* Deep gold shadow for 3D tower bevel facets */}
-          <linearGradient id="hzGoldShadow" x1="0%" y1="0%" x2="100%" y2="100%">
+          <linearGradient id={gradientIds.shadow} x1="0%" y1="0%" x2="100%" y2="100%">
             <stop offset="0%" stopColor="#C4881E" />
             <stop offset="100%" stopColor="#693F05" />
           </linearGradient>
 
           {/* Gold metallic ring gradient */}
-          <linearGradient id="hzGoldRing" x1="0%" y1="0%" x2="100%" y2="100%">
+          <linearGradient id={gradientIds.ring} x1="0%" y1="0%" x2="100%" y2="100%">
             <stop offset="0%" stopColor="#E2A62C" />
             <stop offset="40%" stopColor="#FFF3B8" />
             <stop offset="70%" stopColor="#C3851B" />
@@ -73,7 +81,7 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
         {/* Outer Circular Orbital Rings */}
         <path
           d="M 45,95 A 62,62 0 1,1 155,95"
-          stroke="url(#hzGoldRing)"
+          stroke={`url(#${gradientIds.ring})`}
           strokeWidth="3.5"
           strokeLinecap="round"
           fill="none"
@@ -81,7 +89,7 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
         />
         <path
           d="M 38,102 A 70,70 0 1,1 162,102"
-          stroke="url(#hzGoldRing)"
+          stroke={`url(#${gradientIds.ring})`}
           strokeWidth="1.75"
           strokeLinecap="round"
           fill="none"
@@ -93,33 +101,33 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
         {/* Tower 1 (Far Left - Small) */}
         <polygon
           points="62,130 62,75 73,68 73,130"
-          fill="url(#hzGoldShadow)"
+          fill={`url(#${gradientIds.shadow})`}
         />
         <polygon
           points="68,130 68,71 73,68 73,130"
-          fill="url(#hzGoldHighlight)"
+          fill={`url(#${gradientIds.highlight})`}
           opacity="0.85"
         />
 
         {/* Tower 2 (Middle Left - Medium-Tall) */}
         <polygon
           points="76,130 76,42 88,34 88,130"
-          fill="url(#hzGoldPrimary)"
+          fill={`url(#${gradientIds.primary})`}
         />
         <polygon
           points="82,130 82,38 88,34 88,130"
-          fill="url(#hzGoldHighlight)"
+          fill={`url(#${gradientIds.highlight})`}
           opacity="0.9"
         />
 
         {/* Tower 3 (Middle Right - Tallest Central Spire) */}
         <polygon
           points="91,130 91,12 103,20 103,130"
-          fill="url(#hzGoldPrimary)"
+          fill={`url(#${gradientIds.primary})`}
         />
         <polygon
           points="97,130 97,16 103,20 103,130"
-          fill="url(#hzGoldShadow)"
+          fill={`url(#${gradientIds.shadow})`}
           opacity="0.8"
         />
         {/* Tower 3 Apex Bevel Accent */}
@@ -132,11 +140,11 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
         {/* Tower 4 (Far Right - Medium-Low) */}
         <polygon
           points="106,130 106,62 117,68 117,130"
-          fill="url(#hzGoldPrimary)"
+          fill={`url(#${gradientIds.primary})`}
         />
         <polygon
           points="112,130 112,65 117,68 117,130"
-          fill="url(#hzGoldShadow)"
+          fill={`url(#${gradientIds.shadow})`}
           opacity="0.9"
         />
 
@@ -147,10 +155,10 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
         />
 
         {/* --- 4-PANE GOLD WINDOW GRID --- */}
-        <rect x="94" y="112" width="5" height="5" rx="0.5" fill="url(#hzGoldPrimary)" />
-        <rect x="101" y="112" width="5" height="5" rx="0.5" fill="url(#hzGoldHighlight)" />
-        <rect x="94" y="119" width="5" height="5" rx="0.5" fill="url(#hzGoldShadow)" />
-        <rect x="101" y="119" width="5" height="5" rx="0.5" fill="url(#hzGoldPrimary)" />
+        <rect x="94" y="112" width="5" height="5" rx="0.5" fill={`url(#${gradientIds.primary})`} />
+        <rect x="101" y="112" width="5" height="5" rx="0.5" fill={`url(#${gradientIds.highlight})`} />
+        <rect x="94" y="119" width="5" height="5" rx="0.5" fill={`url(#${gradientIds.shadow})`} />
+        <rect x="101" y="119" width="5" height="5" rx="0.5" fill={`url(#${gradientIds.primary})`} />
       </svg>
     );
   };
@@ -159,7 +167,7 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
   if (variant === 'icon') {
     return (
       <div className={`inline-flex items-center justify-center ${className}`}>
-        <LogoMark />
+        {renderLogoMark()}
       </div>
     );
   }
@@ -168,7 +176,7 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
   if (variant === 'compact' || variant === 'full') {
     return (
       <div className={`inline-flex flex-col items-center text-center ${className}`}>
-        <LogoMark customSize={variant === 'full' ? 88 : 56} />
+        {renderLogoMark(variant === 'full' ? 88 : 56)}
         
         {/* Main Title */}
         <span
@@ -207,26 +215,26 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
 
   // 3. HORIZONTAL HEADER / NAVBAR VARIANT (Default)
   return (
-    <div className={`inline-flex items-center gap-2.5 sm:gap-3 ${className}`}>
-      <LogoMark />
+    <div className={`inline-flex items-center gap-1.5 sm:gap-3 ${className}`}>
+      {renderLogoMark()}
       <div className="flex flex-col justify-center">
         <div className="flex items-baseline gap-1">
           <span
-            className={`font-serif font-bold text-base sm:text-lg tracking-wider leading-none ${
+            className={`font-serif font-bold text-xs sm:text-lg tracking-wider leading-none ${
               theme === 'dark' ? 'text-white' : 'text-slate-900'
             }`}
             style={{ letterSpacing: '0.06em' }}
           >
             HAZARIBAG
           </span>
-          <span className="font-serif font-bold text-xs sm:text-sm tracking-widest text-[#B3780D] leading-none">
+          <span className="hidden sm:inline font-serif font-bold text-sm tracking-widest text-blue-600 leading-none">
             PROPERTIES
           </span>
         </div>
 
         {showTagline && (
           <span
-            className={`text-[8.5px] sm:text-[9px] uppercase font-bold tracking-[0.16em] mt-0.5 leading-tight ${
+            className={`hidden sm:inline text-[9px] uppercase font-bold tracking-[0.16em] mt-0.5 leading-tight ${
               theme === 'dark' ? 'text-slate-400' : 'text-slate-500'
             }`}
           >
