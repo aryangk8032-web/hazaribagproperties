@@ -1,43 +1,79 @@
 import React, { useState } from 'react';
-import { AtSign, LoaderCircle, ShieldCheck, User, X } from 'lucide-react';
+import { AtSign, LockKeyhole, LoaderCircle, Phone, ShieldCheck, User, X } from 'lucide-react';
 import { useApp, type UserRole } from '../../context/AppContext';
 import { BrandLogo } from './BrandLogo';
 
+type AuthMode = 'signin' | 'signup';
+
 export const AuthModal: React.FC = () => {
-  const { isAuthModalOpen, closeAuthModal, signInWithEmail } = useApp();
+  const { isAuthModalOpen, closeAuthModal, signInWithPassword, signUpWithPassword } = useApp();
+  const [mode, setMode] = useState<AuthMode>('signin');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
+  const [password, setPassword] = useState('');
   const [role, setRole] = useState<Exclude<UserRole, 'admin'>>('buyer');
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
 
   if (!isAuthModalOpen) return null;
 
-  const submit = async (event: React.FormEvent) => {
-    event.preventDefault();
-    setLoading(true); setMessage('');
-    try {
-      await signInWithEmail(email.trim(), name.trim(), phone.trim(), role);
-      setMessage('We sent a secure sign-in link to your email address.');
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Unable to send a sign-in link.');
-    } finally { setLoading(false); }
+  const switchMode = (nextMode: AuthMode) => {
+    setMode(nextMode);
+    setMessage('');
+    setPassword('');
   };
 
-  return <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-    <div className="bg-white rounded-xl max-w-md w-full overflow-hidden shadow-xl border border-slate-200" onClick={(event) => event.stopPropagation()}>
-      <div className="bg-slate-900 text-white p-5 relative flex items-center justify-between"><BrandLogo variant="horizontal" theme="dark" size="sm" showTagline /><button onClick={closeAuthModal} className="p-1.5 rounded-md bg-white/10 hover:bg-white/20" aria-label="Close sign in"><X size={16} /></button></div>
-      <form onSubmit={submit} className="p-6 space-y-4">
-        <div><h2 className="text-lg font-bold text-slate-900">Sign in securely</h2><p className="text-xs text-slate-500 mt-1">We use a password-free link so your account and saved listings remain protected.</p></div>
-        {message && <div className="rounded-md border border-blue-200 bg-blue-50 p-3 text-xs text-blue-900">{message}</div>}
-        <label className="block text-xs font-bold uppercase tracking-wider text-slate-700">Full name<div className="relative mt-1"><User size={15} className="absolute left-3 top-2.5 text-slate-400" /><input required value={name} onChange={(event) => setName(event.target.value)} className="w-full pl-9 pr-3 py-2 border border-slate-200 rounded-md text-sm" placeholder="Your name" /></div></label>
-        <label className="block text-xs font-bold uppercase tracking-wider text-slate-700">Email address<div className="relative mt-1"><AtSign size={15} className="absolute left-3 top-2.5 text-slate-400" /><input required type="email" value={email} onChange={(event) => setEmail(event.target.value)} className="w-full pl-9 pr-3 py-2 border border-slate-200 rounded-md text-sm" placeholder="you@example.com" /></div></label>
-        <label className="block text-xs font-bold uppercase tracking-wider text-slate-700">Phone <span className="normal-case text-slate-400">(optional)</span><input value={phone} onChange={(event) => setPhone(event.target.value)} className="w-full mt-1 px-3 py-2 border border-slate-200 rounded-md text-sm" placeholder="+91 94311 00000" /></label>
-        <div><div className="text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">I am here to</div><div className="grid grid-cols-2 gap-2"><button type="button" onClick={() => setRole('buyer')} className={`py-2 rounded-md border text-xs font-semibold ${role === 'buyer' ? 'bg-blue-50 border-blue-600 text-blue-900' : 'border-slate-200 text-slate-600'}`}>Buy / Rent</button><button type="button" onClick={() => setRole('seller')} className={`py-2 rounded-md border text-xs font-semibold ${role === 'seller' ? 'bg-blue-50 border-blue-600 text-blue-900' : 'border-slate-200 text-slate-600'}`}>List Property</button></div></div>
-        <div className="flex gap-2 text-[11px] text-slate-500"><ShieldCheck size={15} className="text-blue-600 shrink-0" />Your access is governed by your Supabase account; admin access cannot be selected here.</div>
-        <button disabled={loading} type="submit" className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white font-medium rounded-md text-sm flex items-center justify-center gap-2">{loading && <LoaderCircle size={15} className="animate-spin" />}{loading ? 'Sending secure link…' : 'Email me a sign-in link'}</button>
-      </form>
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setLoading(true);
+    setMessage('');
+
+    try {
+      if (mode === 'signin') {
+        await signInWithPassword(email.trim(), password);
+        return;
+      }
+
+      const { confirmationRequired } = await signUpWithPassword(email.trim(), password, name.trim(), phone.trim(), role);
+      setMessage(confirmationRequired ? 'Account created. Please confirm your email, then sign in with your password.' : 'Account created and signed in successfully.');
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'We could not complete that request. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-xs" role="presentation">
+      <div className="w-full max-w-md overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl" role="dialog" aria-modal="true" aria-labelledby="auth-heading" onClick={(event) => event.stopPropagation()}>
+        <div className="relative flex items-center justify-between bg-slate-900 p-5 text-white">
+          <BrandLogo variant="horizontal" theme="dark" size="sm" showTagline />
+          <button onClick={closeAuthModal} className="rounded-md bg-white/10 p-1.5 hover:bg-white/20" aria-label="Close authentication"><X size={16} /></button>
+        </div>
+        <form onSubmit={submit} className="space-y-4 p-6">
+          <div>
+            <h2 id="auth-heading" className="text-lg font-bold text-slate-900">{mode === 'signin' ? 'Welcome back' : 'Create your account'}</h2>
+            <p className="mt-1 text-xs text-slate-500">{mode === 'signin' ? 'Sign in with your email address and password.' : 'Use your email and password to manage saved properties and listings.'}</p>
+          </div>
+
+          {message && <div className="rounded-md border border-blue-200 bg-blue-50 p-3 text-xs text-blue-900" role="status">{message}</div>}
+
+          {mode === 'signup' && <>
+            <label className="block text-xs font-bold uppercase tracking-wider text-slate-700">Full name<div className="relative mt-1"><User size={15} className="absolute left-3 top-2.5 text-slate-400" /><input required value={name} onChange={(event) => setName(event.target.value)} className="w-full rounded-md border border-slate-200 py-2 pl-9 pr-3 text-sm" placeholder="Your name" /></div></label>
+            <label className="block text-xs font-bold uppercase tracking-wider text-slate-700">Phone number<div className="relative mt-1"><Phone size={15} className="absolute left-3 top-2.5 text-slate-400" /><input required type="tel" value={phone} onChange={(event) => setPhone(event.target.value)} className="w-full rounded-md border border-slate-200 py-2 pl-9 pr-3 text-sm" placeholder="+91 94311 00000" /></div></label>
+          </>}
+
+          <label className="block text-xs font-bold uppercase tracking-wider text-slate-700">Email address<div className="relative mt-1"><AtSign size={15} className="absolute left-3 top-2.5 text-slate-400" /><input required type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} className="w-full rounded-md border border-slate-200 py-2 pl-9 pr-3 text-sm" placeholder="you@example.com" /></div></label>
+          <label className="block text-xs font-bold uppercase tracking-wider text-slate-700">Password<div className="relative mt-1"><LockKeyhole size={15} className="absolute left-3 top-2.5 text-slate-400" /><input required minLength={6} type="password" autoComplete={mode === 'signin' ? 'current-password' : 'new-password'} value={password} onChange={(event) => setPassword(event.target.value)} className="w-full rounded-md border border-slate-200 py-2 pl-9 pr-3 text-sm" placeholder="At least 6 characters" /></div></label>
+
+          {mode === 'signup' && <div><div className="mb-1 text-xs font-bold uppercase tracking-wider text-slate-700">I am here to</div><div className="grid grid-cols-2 gap-2"><button type="button" onClick={() => setRole('buyer')} className={`rounded-md border py-2 text-xs font-semibold ${role === 'buyer' ? 'border-blue-600 bg-blue-50 text-blue-900' : 'border-slate-200 text-slate-600'}`}>Buy / Rent</button><button type="button" onClick={() => setRole('seller')} className={`rounded-md border py-2 text-xs font-semibold ${role === 'seller' ? 'border-blue-600 bg-blue-50 text-blue-900' : 'border-slate-200 text-slate-600'}`}>List Property</button></div></div>}
+
+          <div className="flex gap-2 text-[11px] text-slate-500"><ShieldCheck size={15} className="shrink-0 text-blue-600" />Admin access is assigned separately; it cannot be selected during sign-up.</div>
+          <button disabled={loading} type="submit" className="flex w-full items-center justify-center gap-2 rounded-md bg-blue-600 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60">{loading && <LoaderCircle size={15} className="animate-spin" />}{loading ? 'Please wait…' : mode === 'signin' ? 'Sign in' : 'Create account'}</button>
+          <p className="text-center text-xs text-slate-600">{mode === 'signin' ? <>New to Hazaribagh Properties? <button type="button" onClick={() => switchMode('signup')} className="font-semibold text-blue-700 hover:underline">Create an account</button></> : <>Already have an account? <button type="button" onClick={() => switchMode('signin')} className="font-semibold text-blue-700 hover:underline">Sign in</button></>}</p>
+        </form>
+      </div>
     </div>
-  </div>;
+  );
 };
