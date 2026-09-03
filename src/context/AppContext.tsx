@@ -1,558 +1,109 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { Property, Lead, FilterState, PropertyType, Purpose, AreaUnit } from '../types/property';
+import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import type { AreaUnit, FilterState, Lead, Property } from '../types/property';
 import { INITIAL_PROPERTIES, INITIAL_LEADS } from '../data/mockProperties';
-import { isSupabaseConfigured } from '../lib/supabase';
-import { createLead as persistLead, createProperty as persistProperty, fetchPublishedProperties } from '../services/propertyRepository';
+import { isSupabaseConfigured, supabase } from '../lib/supabase';
+import { createLead, createProperty, fetchAccessibleLeads, fetchAccessibleProperties, fetchPublishedProperties, fetchSavedPropertyIds, persistLeadStatus, persistPropertyUpdate, toggleSavedProperty } from '../services/propertyRepository';
 
 export type UserRole = 'buyer' | 'seller' | 'admin';
-
-interface Toast {
-  id: string;
-  type: 'success' | 'info' | 'warning' | 'error';
-  message: string;
-}
+type Toast = { id: string; type: 'success' | 'info' | 'warning' | 'error'; message: string };
 
 interface AppContextType {
-  // Navigation & Routing
-  currentPath: string;
-  navigate: (path: string, params?: Record<string, string>) => void;
-  routeParams: Record<string, string>;
-  
-  // Properties State
-  properties: Property[];
-  savedPropertyIds: string[];
-  toggleSaveProperty: (id: string) => void;
-  isPropertySaved: (id: string) => boolean;
-  addProperty: (property: Partial<Property>) => Property;
-  updateProperty: (id: string, updates: Partial<Property>) => void;
-  getPropertyBySlug: (slug: string) => Property | undefined;
-  getPropertyById: (id: string) => Property | undefined;
-  
-  // Admin & Verification actions
-  approveListing: (id: string) => void;
-  rejectListing: (id: string, reason?: string) => void;
-  requestChangesListing: (id: string, reason: string) => void;
-  toggleFeatured: (id: string) => void;
-  toggleListingStatus: (id: string, newStatus: Property['listingStatus']) => void;
-  
-  // Leads & Inquiries
-  leads: Lead[];
-  addLead: (lead: Omit<Lead, 'id' | 'createdAt'>) => void;
-  updateLeadStatus: (id: string, status: Lead['status'], notes?: string) => void;
-  
-  // Filters & Search
-  filters: FilterState;
-  setFilters: React.Dispatch<React.SetStateAction<FilterState>>;
-  resetFilters: () => void;
-  setQuickFilter: (updates: Partial<FilterState>) => void;
-  
-  // Global Modals & Utilities
-  isSiteVisitOpen: boolean;
-  openSiteVisitModal: (property?: Property) => void;
-  closeSiteVisitModal: () => void;
-  selectedPropertyForModal?: Property;
-  
-  isInquiryOpen: boolean;
-  openInquiryModal: (property?: Property) => void;
-  closeInquiryModal: () => void;
-  
-  isUnitConverterOpen: boolean;
-  openUnitConverterModal: () => void;
-  closeUnitConverterModal: () => void;
-  
-  isVerificationModalOpen: boolean;
-  openVerificationModal: () => void;
-  closeVerificationModal: () => void;
-  
-  isAuthModalOpen: boolean;
-  openAuthModal: (mode?: 'signin' | 'signup') => void;
-  closeAuthModal: () => void;
-  
-  // User profile & role
-  currentUserRole: UserRole;
-  setCurrentUserRole: (role: UserRole) => void;
-  isLoggedIn: boolean;
-  userPhone: string;
-  userName: string;
-  setUserSession: (name: string, phone: string, role: UserRole) => void;
-  logout: () => void;
-  
-  // Toasts
-  toasts: Toast[];
-  showToast: (message: string, type?: Toast['type']) => void;
+  currentPath: string; navigate: (path: string, params?: Record<string, string>) => void; routeParams: Record<string, string>;
+  properties: Property[]; savedPropertyIds: string[]; toggleSaveProperty: (id: string) => Promise<void>; isPropertySaved: (id: string) => boolean;
+  addProperty: (property: Partial<Property>) => Promise<Property>; updateProperty: (id: string, updates: Partial<Property>) => Promise<void>;
+  getPropertyBySlug: (slug: string) => Property | undefined; getPropertyById: (id: string) => Property | undefined;
+  approveListing: (id: string) => Promise<void>; rejectListing: (id: string, reason?: string) => Promise<void>; requestChangesListing: (id: string, reason: string) => Promise<void>;
+  updatePropertyVerification: (id: string, status: Property['verificationStatus'], notes: string) => Promise<void>; toggleFeatured: (id: string) => Promise<void>; toggleListingStatus: (id: string, status: Property['listingStatus']) => Promise<void>;
+  leads: Lead[]; addLead: (lead: Omit<Lead, 'id' | 'createdAt'>) => Promise<void>; updateLeadStatus: (id: string, status: Lead['status'], notes?: string) => Promise<void>;
+  filters: FilterState; setFilters: React.Dispatch<React.SetStateAction<FilterState>>; resetFilters: () => void; setQuickFilter: (updates: Partial<FilterState>) => void;
+  isSiteVisitOpen: boolean; openSiteVisitModal: (property?: Property) => void; closeSiteVisitModal: () => void; selectedPropertyForModal?: Property;
+  isInquiryOpen: boolean; openInquiryModal: (property?: Property) => void; closeInquiryModal: () => void;
+  isUnitConverterOpen: boolean; openUnitConverterModal: () => void; closeUnitConverterModal: () => void;
+  isVerificationModalOpen: boolean; openVerificationModal: () => void; closeVerificationModal: () => void;
+  isAuthModalOpen: boolean; openAuthModal: (mode?: 'signin' | 'signup') => void; closeAuthModal: () => void;
+  currentUserRole: UserRole; setCurrentUserRole: (role: UserRole) => void; currentUserId?: string; isLoggedIn: boolean; isReady: boolean; userPhone: string; userName: string;
+  signInWithEmail: (email: string, name: string, phone: string, role: Exclude<UserRole, 'admin'>) => Promise<void>; logout: () => Promise<void>;
+  toasts: Toast[]; showToast: (message: string, type?: Toast['type']) => void;
 }
 
-const DEFAULT_FILTERS: FilterState = {
-  purpose: 'buy',
-  propertyType: 'all',
-  locality: '',
-  minPrice: undefined,
-  maxPrice: undefined,
-  minArea: undefined,
-  maxArea: undefined,
-  areaUnit: 'decimal',
-  bedrooms: 'all',
-  furnishing: 'all',
-  possession: 'all',
-  listedBy: 'all',
-  verifiedOnly: false,
-  sortBy: 'featured',
-  searchQuery: ''
-};
-
+const DEFAULT_FILTERS: FilterState = { purpose: 'buy', propertyType: 'all', locality: '', minPrice: undefined, maxPrice: undefined, minArea: undefined, maxArea: undefined, areaUnit: 'decimal' as AreaUnit, bedrooms: 'all', furnishing: 'all', possession: 'all', listedBy: 'all', verifiedOnly: false, sortBy: 'featured', searchQuery: '' };
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
+const makeProperty = (input: Partial<Property>, userName: string, userPhone: string): Property => {
+  const id = `prop-${crypto.randomUUID()}`;
+  const listingId = `HP-${Math.floor(1000 + Math.random() * 9000)}`;
+  const slug = `${(input.title || 'property').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')}-${listingId.toLowerCase()}`;
+  const now = new Date().toISOString();
+  return {
+    id, listingId, slug, purpose: input.purpose || 'buy', propertyType: input.propertyType || 'plot', title: input.title || 'Untitled Property', description: input.description || '', price: input.price || 0,
+    monthlyRent: input.monthlyRent, securityDeposit: input.securityDeposit, maintenanceCharges: input.maintenanceCharges, isPriceNegotiable: Boolean(input.isPriceNegotiable),
+    locality: input.locality || 'Matwari', localitySlug: input.localitySlug || (input.locality || 'matwari').toLowerCase().replace(/\s+/g, '-'), address: input.address || 'Hazaribagh', landmark: input.landmark, city: 'Hazaribagh', state: 'Jharkhand', pincode: input.pincode || '825301', latitude: input.latitude || 23.9935, longitude: input.longitude || 85.3621,
+    bedrooms: input.bedrooms, bathrooms: input.bathrooms, balconies: input.balconies, builtUpArea: input.builtUpArea, carpetArea: input.carpetArea, plotArea: input.plotArea, areaUnit: input.areaUnit || 'decimal', roadWidthFt: input.roadWidthFt, facing: input.facing, isBoundaryWallMade: input.isBoundaryWallMade, isCornerPlot: input.isCornerPlot, landUse: input.landUse, floorNumber: input.floorNumber, totalFloors: input.totalFloors, furnishing: input.furnishing, possession: input.possession,
+    amenities: input.amenities || [], highlights: input.highlights || [], images: input.images?.length ? input.images : [{ id: 'img-def', url: 'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=1200&q=80', isPrimary: true }],
+    verificationStatus: 'pending', listingStatus: 'under_review', listedBy: input.listedBy || 'owner', sellerId: input.sellerId, sellerName: input.sellerName || userName, ownerName: input.ownerName || userName, ownerPhone: input.ownerPhone || userPhone, ownerEmail: input.ownerEmail, contactPhone: input.contactPhone || userPhone, privateDocuments: input.privateDocuments || [], featured: false, viewsCount: 0, leadsCount: 0, createdAt: now, updatedAt: now,
+  };
+};
+
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Navigation
-  const [currentPath, setCurrentPath] = useState<string>(() => {
-    if (typeof window !== 'undefined') {
-      const path = window.location.pathname;
-      return path && path !== '/' ? path : '/';
-    }
-    return '/';
-  });
-
+  const [currentPath, setCurrentPath] = useState(() => window.location.pathname || '/');
   const [routeParams, setRouteParams] = useState<Record<string, string>>({});
-
-  // Sync with browser URL / PopState
-  useEffect(() => {
-    const handlePopState = () => {
-      setCurrentPath(window.location.pathname || '/');
-    };
-    window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
-  }, []);
-
-  const navigate = (path: string, params?: Record<string, string>) => {
-    if (typeof window !== 'undefined') {
-      window.history.pushState({}, '', path);
-    }
-    setCurrentPath(path);
-    if (params) {
-      setRouteParams(params);
-    }
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  // Properties State with LocalStorage persistence
-  const [properties, setProperties] = useState<Property[]>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('hzb_properties');
-      if (saved) {
-        try {
-          return JSON.parse(saved);
-        } catch {
-          // ignore error
-        }
-      }
-    }
-    return INITIAL_PROPERTIES;
-  });
-
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('hzb_properties', JSON.stringify(properties));
-    }
-  }, [properties]);
-
-  useEffect(() => {
-    if (!isSupabaseConfigured) return;
-
-    let cancelled = false;
-    fetchPublishedProperties()
-      .then((publishedProperties) => {
-        if (!cancelled && publishedProperties && publishedProperties.length > 0) {
-          setProperties(publishedProperties);
-        }
-      })
-      .catch((error) => console.error('Could not load published properties from Supabase.', error));
-
-    return () => { cancelled = true; };
-  }, []);
-
-  // Saved Properties
-  const [savedPropertyIds, setSavedPropertyIds] = useState<string[]>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('hzb_saved_props');
-      if (saved) {
-        try {
-          return JSON.parse(saved);
-        } catch {}
-      }
-    }
-    return ['prop-1', 'prop-2'];
-  });
-
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('hzb_saved_props', JSON.stringify(savedPropertyIds));
-    }
-  }, [savedPropertyIds]);
-
-  const toggleSaveProperty = (id: string) => {
-    setSavedPropertyIds(prev => {
-      const exists = prev.includes(id);
-      if (exists) {
-        showToast('Property removed from saved listings', 'info');
-        return prev.filter(item => item !== id);
-      } else {
-        showToast('Property saved to your favourites', 'success');
-        return [...prev, id];
-      }
-    });
-  };
-
-  const isPropertySaved = (id: string) => savedPropertyIds.includes(id);
-
-  // Leads state
-  const [leads, setLeads] = useState<Lead[]>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('hzb_leads');
-      if (saved) {
-        try {
-          return JSON.parse(saved);
-        } catch {}
-      }
-    }
-    return INITIAL_LEADS;
-  });
-
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('hzb_leads', JSON.stringify(leads));
-    }
-  }, [leads]);
-
-  const addLead = (newLeadData: Omit<Lead, 'id' | 'createdAt'>) => {
-    const newLead: Lead = {
-      ...newLeadData,
-      id: `lead-${Date.now()}`,
-      createdAt: new Date().toISOString()
-    };
-    setLeads(prev => [newLead, ...prev]);
-    void persistLead(newLead).catch((error) => {
-      console.error('Could not save lead to Supabase.', error);
-      showToast('Inquiry saved on this device; it will be retried when the connection is available.', 'warning');
-    });
-    // increment leads count on property
-    setProperties(prev => prev.map(p => p.id === newLead.propertyId ? { ...p, leadsCount: (p.leadsCount || 0) + 1 } : p));
-  };
-
-  const updateLeadStatus = (id: string, status: Lead['status'], notes?: string) => {
-    setLeads(prev => prev.map(lead => {
-      if (lead.id === id) {
-        return {
-          ...lead,
-          status,
-          ...(notes ? { adminNotes: notes } : {})
-        };
-      }
-      return lead;
-    }));
-    showToast(`Lead status updated to ${status.replace('_', ' ')}`, 'success');
-  };
-
-  // Add / Update Property
-  const addProperty = (newPropData: Partial<Property>): Property => {
-    const id = `prop-${Date.now()}`;
-    const listingId = `HP-${Math.floor(1000 + Math.random() * 9000)}`;
-    const slug = `${(newPropData.title || 'property').toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${listingId.toLowerCase()}`;
-    
-    const newProperty: Property = {
-      id,
-      listingId,
-      slug,
-      purpose: newPropData.purpose || 'buy',
-      propertyType: newPropData.propertyType || 'plot',
-      title: newPropData.title || 'Untitled Property',
-      description: newPropData.description || '',
-      price: newPropData.price || 0,
-      monthlyRent: newPropData.monthlyRent,
-      securityDeposit: newPropData.securityDeposit,
-      maintenanceCharges: newPropData.maintenanceCharges,
-      isPriceNegotiable: !!newPropData.isPriceNegotiable,
-      locality: newPropData.locality || 'Matwari',
-      localitySlug: newPropData.localitySlug || (newPropData.locality || 'matwari').toLowerCase().replace(/\s+/g, '-'),
-      address: newPropData.address || 'Hazaribagh',
-      landmark: newPropData.landmark,
-      city: 'Hazaribagh',
-      state: 'Jharkhand',
-      pincode: newPropData.pincode || '825301',
-      latitude: newPropData.latitude || 23.9935,
-      longitude: newPropData.longitude || 85.3621,
-      bedrooms: newPropData.bedrooms,
-      bathrooms: newPropData.bathrooms,
-      balconies: newPropData.balconies,
-      builtUpArea: newPropData.builtUpArea,
-      carpetArea: newPropData.carpetArea,
-      plotArea: newPropData.plotArea,
-      areaUnit: newPropData.areaUnit || 'decimal',
-      roadWidthFt: newPropData.roadWidthFt,
-      facing: newPropData.facing,
-      isBoundaryWallMade: newPropData.isBoundaryWallMade,
-      isCornerPlot: newPropData.isCornerPlot,
-      landUse: newPropData.landUse,
-      floorNumber: newPropData.floorNumber,
-      totalFloors: newPropData.totalFloors,
-      furnishing: newPropData.furnishing,
-      possession: newPropData.possession,
-      amenities: newPropData.amenities || [],
-      highlights: newPropData.highlights || [],
-      images: newPropData.images?.length ? newPropData.images : [
-        { id: 'img-def', url: 'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=1200&q=80', isPrimary: true }
-      ],
-      verificationStatus: 'pending',
-      listingStatus: 'under_review',
-      listedBy: newPropData.listedBy || 'owner',
-      ownerName: newPropData.ownerName || 'Property Owner',
-      ownerPhone: newPropData.ownerPhone || '+91 98765 43210',
-      ownerEmail: newPropData.ownerEmail,
-      privateDocuments: newPropData.privateDocuments || [],
-      featured: false,
-      viewsCount: 0,
-      leadsCount: 0,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
-
-    setProperties(prev => [newProperty, ...prev]);
-    void persistProperty(newProperty).catch((error) => {
-      console.error('Could not save property to Supabase.', error);
-      if (isSupabaseConfigured) {
-        showToast(error instanceof Error ? error.message : 'Property saved locally but not yet submitted.', 'warning');
-      }
-    });
-    return newProperty;
-  };
-
-  const updateProperty = (id: string, updates: Partial<Property>) => {
-    setProperties(prev => prev.map(p => {
-      if (p.id === id) {
-        return {
-          ...p,
-          ...updates,
-          updatedAt: new Date().toISOString()
-        };
-      }
-      return p;
-    }));
-  };
-
-  const getPropertyBySlug = (slug: string) => {
-    return properties.find(p => p.slug === slug || p.id === slug || p.listingId.toLowerCase() === slug.toLowerCase());
-  };
-
-  const getPropertyById = (id: string) => {
-    return properties.find(p => p.id === id || p.listingId === id);
-  };
-
-  // Admin Listing Verification Actions
-  const approveListing = (id: string) => {
-    setProperties(prev => prev.map(p => {
-      if (p.id === id) {
-        return {
-          ...p,
-          listingStatus: 'live',
-          verificationStatus: 'verified',
-          verificationNotes: 'Verified by Hazaribagh Properties review team. Title deed & on-site details validated.',
-          adminChangeRequestReason: undefined,
-          updatedAt: new Date().toISOString()
-        };
-      }
-      return p;
-    }));
-    showToast('Listing successfully approved and published as Verified!', 'success');
-  };
-
-  const rejectListing = (id: string, reason?: string) => {
-    setProperties(prev => prev.map(p => {
-      if (p.id === id) {
-        return {
-          ...p,
-          listingStatus: 'rejected',
-          adminChangeRequestReason: reason || 'Listing rejected due to non-compliant documentation or location mismatch.',
-          updatedAt: new Date().toISOString()
-        };
-      }
-      return p;
-    }));
-    showToast('Listing status set to Rejected.', 'info');
-  };
-
-  const requestChangesListing = (id: string, reason: string) => {
-    setProperties(prev => prev.map(p => {
-      if (p.id === id) {
-        return {
-          ...p,
-          listingStatus: 'changes_requested',
-          adminChangeRequestReason: reason,
-          updatedAt: new Date().toISOString()
-        };
-      }
-      return p;
-    }));
-    showToast('Changes requested from property seller.', 'warning');
-  };
-
-  const toggleFeatured = (id: string) => {
-    setProperties(prev => prev.map(p => {
-      if (p.id === id) {
-        const next = !p.featured;
-        showToast(next ? 'Marked as Featured property' : 'Removed from Featured', 'info');
-        return { ...p, featured: next };
-      }
-      return p;
-    }));
-  };
-
-  const toggleListingStatus = (id: string, newStatus: Property['listingStatus']) => {
-    setProperties(prev => prev.map(p => {
-      if (p.id === id) {
-        return { ...p, listingStatus: newStatus, updatedAt: new Date().toISOString() };
-      }
-      return p;
-    }));
-    showToast(`Listing status updated to ${newStatus.replace('_', ' ')}`, 'info');
-  };
-
-  // Filters
-  const [filters, setFilters] = useState<FilterState>(DEFAULT_FILTERS);
-
-  const resetFilters = () => {
-    setFilters(DEFAULT_FILTERS);
-  };
-
-  const setQuickFilter = (updates: Partial<FilterState>) => {
-    // Quick links represent a new search preset, so stale filters from a
-    // previous visit (including saved-only mode) must not leak into it.
-    setFilters({ ...DEFAULT_FILTERS, ...updates });
-  };
-
-  // Modals state
-  const [isSiteVisitOpen, setIsSiteVisitOpen] = useState(false);
-  const [isInquiryOpen, setIsInquiryOpen] = useState(false);
-  const [isUnitConverterOpen, setIsUnitConverterOpen] = useState(false);
-  const [isVerificationModalOpen, setIsVerificationModalOpen] = useState(false);
-  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
-  const [selectedPropertyForModal, setSelectedPropertyForModal] = useState<Property | undefined>();
-
-  const openSiteVisitModal = (property?: Property) => {
-    setSelectedPropertyForModal(property);
-    setIsSiteVisitOpen(true);
-  };
-  const closeSiteVisitModal = () => {
-    setIsSiteVisitOpen(false);
-  };
-
-  const openInquiryModal = (property?: Property) => {
-    setSelectedPropertyForModal(property);
-    setIsInquiryOpen(true);
-  };
-  const closeInquiryModal = () => {
-    setIsInquiryOpen(false);
-  };
-
-  const openUnitConverterModal = () => setIsUnitConverterOpen(true);
-  const closeUnitConverterModal = () => setIsUnitConverterOpen(false);
-
-  const openVerificationModal = () => setIsVerificationModalOpen(true);
-  const closeVerificationModal = () => setIsVerificationModalOpen(false);
-
-  const openAuthModal = () => setIsAuthModalOpen(true);
-  const closeAuthModal = () => setIsAuthModalOpen(false);
-
-  // User Profile & Role Simulation
+  const [properties, setProperties] = useState<Property[]>(isSupabaseConfigured ? [] : INITIAL_PROPERTIES);
+  const [leads, setLeads] = useState<Lead[]>(isSupabaseConfigured ? [] : INITIAL_LEADS);
+  const [savedPropertyIds, setSavedPropertyIds] = useState<string[]>([]);
   const [currentUserRole, setCurrentUserRole] = useState<UserRole>('buyer');
-  const [isLoggedIn, setIsLoggedIn] = useState(true); // default logged in for smooth preview
-  const [userName, setUserName] = useState('Shri Anand Prakash');
-  const [userPhone, setUserPhone] = useState('+91 94311 88776');
-
-  const setUserSession = (name: string, phone: string, role: UserRole) => {
-    setUserName(name);
-    setUserPhone(phone);
-    setCurrentUserRole(role);
-    setIsLoggedIn(true);
-    showToast(`Signed in as ${name} (${role})`, 'success');
-  };
-
-  const logout = () => {
-    setIsLoggedIn(false);
-    showToast('Signed out successfully', 'info');
-  };
-
-  // Toasts
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [isReady, setIsReady] = useState(!isSupabaseConfigured);
+  const [userName, setUserName] = useState('');
+  const [userPhone, setUserPhone] = useState('');
+  const [currentUserId, setCurrentUserId] = useState<string>();
+  const [filters, setFilters] = useState<FilterState>(DEFAULT_FILTERS);
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const [isSiteVisitOpen, setIsSiteVisitOpen] = useState(false); const [isInquiryOpen, setIsInquiryOpen] = useState(false); const [isUnitConverterOpen, setIsUnitConverterOpen] = useState(false); const [isVerificationModalOpen, setIsVerificationModalOpen] = useState(false); const [isAuthModalOpen, setIsAuthModalOpen] = useState(false); const [selectedPropertyForModal, setSelectedPropertyForModal] = useState<Property>();
 
-  const showToast = (message: string, type: Toast['type'] = 'info') => {
-    const id = `toast-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`;
-    setToasts(prev => [...prev, { id, type, message }]);
-    setTimeout(() => {
-      setToasts(prev => prev.filter(t => t.id !== id));
-    }, 4000);
-  };
+  const showToast = useCallback((message: string, type: Toast['type'] = 'info') => {
+    const id = crypto.randomUUID(); setToasts((items) => [...items, { id, message, type }]); window.setTimeout(() => setToasts((items) => items.filter((item) => item.id !== id)), 4000);
+  }, []);
 
-  return (
-    <AppContext.Provider
-      value={{
-        currentPath,
-        navigate,
-        routeParams,
-        properties,
-        savedPropertyIds,
-        toggleSaveProperty,
-        isPropertySaved,
-        addProperty,
-        updateProperty,
-        getPropertyBySlug,
-        getPropertyById,
-        approveListing,
-        rejectListing,
-        requestChangesListing,
-        toggleFeatured,
-        toggleListingStatus,
-        leads,
-        addLead,
-        updateLeadStatus,
-        filters,
-        setFilters,
-        resetFilters,
-        setQuickFilter,
-        isSiteVisitOpen,
-        openSiteVisitModal,
-        closeSiteVisitModal,
-        selectedPropertyForModal,
-        isInquiryOpen,
-        openInquiryModal,
-        closeInquiryModal,
-        isUnitConverterOpen,
-        openUnitConverterModal,
-        closeUnitConverterModal,
-        isVerificationModalOpen,
-        openVerificationModal,
-        closeVerificationModal,
-        isAuthModalOpen,
-        openAuthModal,
-        closeAuthModal,
-        currentUserRole,
-        setCurrentUserRole,
-        isLoggedIn,
-        userName,
-        userPhone,
-        setUserSession,
-        logout,
-        toasts,
-        showToast
-      }}
-    >
-      {children}
-    </AppContext.Provider>
-  );
+  const refreshData = useCallback(async () => {
+    if (!supabase) return;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { const publicProperties = await fetchPublishedProperties(); setProperties(publicProperties || []); setLeads([]); setSavedPropertyIds([]); setCurrentUserId(undefined); return; }
+    const [{ data: profile, error: profileError }, accessibleProperties, accessibleLeads, savedIds] = await Promise.all([
+      supabase.from('profiles').select('full_name, phone, role').single(), fetchAccessibleProperties(), fetchAccessibleLeads(), fetchSavedPropertyIds(),
+    ]);
+    if (profileError) throw profileError;
+    setProperties(accessibleProperties); setLeads(accessibleLeads); setSavedPropertyIds(savedIds); setCurrentUserId(user.id); setUserName(profile?.full_name || user.email || 'Account'); setUserPhone(profile?.phone || ''); setCurrentUserRole((profile?.role as UserRole) || 'buyer'); setIsLoggedIn(true);
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    const initialise = async () => { try { await refreshData(); } catch (error) { console.error('Marketplace data load failed:', error instanceof Error ? error.message : JSON.stringify(error)); if (active) showToast('Unable to load marketplace data. Please refresh.', 'error'); } finally { if (active) setIsReady(true); } };
+    void initialise();
+    if (!supabase) return () => { active = false; };
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => { void refreshData().catch(console.error); });
+    return () => { active = false; subscription.unsubscribe(); };
+  }, [refreshData, showToast]);
+
+  useEffect(() => { const onPopState = () => setCurrentPath(window.location.pathname || '/'); window.addEventListener('popstate', onPopState); return () => window.removeEventListener('popstate', onPopState); }, []);
+  const navigate = (path: string, params?: Record<string, string>) => { window.history.pushState({}, '', path); setCurrentPath(path); setRouteParams(params || {}); window.scrollTo({ top: 0, behavior: 'smooth' }); };
+  const requireLogin = () => { if (isLoggedIn || !isSupabaseConfigured) return true; showToast('Please sign in to continue.', 'info'); setIsAuthModalOpen(true); return false; };
+  const isPropertySaved = (id: string) => savedPropertyIds.includes(id);
+  const toggleSaveProperty = async (id: string) => { if (!requireLogin()) return; const saved = isPropertySaved(id); try { await toggleSavedProperty(id, saved); setSavedPropertyIds((items) => saved ? items.filter((item) => item !== id) : [...items, id]); showToast(saved ? 'Property removed from saved listings' : 'Property saved to your favourites', saved ? 'info' : 'success'); } catch (error) { showToast(error instanceof Error ? error.message : 'Could not update saved properties.', 'error'); } };
+  const addProperty = async (input: Partial<Property>) => { if (!requireLogin()) throw new Error('Sign in required'); const property = makeProperty(input, userName, userPhone); await createProperty(property); setProperties((items) => [property, ...items]); showToast('Listing submitted for verification.', 'success'); return property; };
+  const updateProperty = async (id: string, updates: Partial<Property>) => { const property = properties.find((item) => item.id === id); if (!property) return; const next = { ...property, ...updates, updatedAt: new Date().toISOString() }; await persistPropertyUpdate(next); setProperties((items) => items.map((item) => item.id === id ? next : item)); };
+  const updatePropertyVerification = async (id: string, verificationStatus: Property['verificationStatus'], notes: string) => { const status: Property['listingStatus'] = verificationStatus === 'rejected' ? 'rejected' : 'live'; await updateProperty(id, { verificationStatus, verificationNotes: notes, listingStatus: status, adminChangeRequestReason: undefined }); showToast(status === 'live' ? 'Listing approved and published.' : 'Listing rejected.', status === 'live' ? 'success' : 'warning'); };
+  const approveListing = async (id: string) => updatePropertyVerification(id, 'verified', 'Verified by the Hazaribagh Properties review team.');
+  const rejectListing = async (id: string, reason?: string) => updateProperty(id, { listingStatus: 'rejected', verificationStatus: 'rejected', adminChangeRequestReason: reason || 'Listing rejected during review.' });
+  const requestChangesListing = async (id: string, reason: string) => updateProperty(id, { listingStatus: 'changes_requested', adminChangeRequestReason: reason });
+  const toggleFeatured = async (id: string) => { const property = properties.find((item) => item.id === id); if (property) await updateProperty(id, { featured: !property.featured }); };
+  const toggleListingStatus = async (id: string, listingStatus: Property['listingStatus']) => updateProperty(id, { listingStatus });
+  const addLead = async (input: Omit<Lead, 'id' | 'createdAt'>) => { if (!requireLogin()) throw new Error('Sign in required'); const lead: Lead = { ...input, id: crypto.randomUUID(), createdAt: new Date().toISOString() }; const { notificationSent } = await createLead(lead); setLeads((items) => [lead, ...items]); showToast(notificationSent ? 'Inquiry received. Confirmation details have been sent.' : 'Inquiry received. We will contact you shortly.', notificationSent ? 'success' : 'info'); };
+  const updateLeadStatus = async (id: string, status: Lead['status'], notes?: string) => { await persistLeadStatus(id, status); setLeads((items) => items.map((lead) => lead.id === id ? { ...lead, status, ...(notes ? { adminNotes: notes } : {}) } : lead)); showToast(`Lead status updated to ${status.replace('_', ' ')}.`, 'success'); };
+  const signInWithEmail = async (email: string, name: string, phone: string, role: Exclude<UserRole, 'admin'>) => { if (!supabase) throw new Error('Authentication is not configured.'); const { error } = await supabase.auth.signInWithOtp({ email, options: { emailRedirectTo: window.location.origin, data: { full_name: name, phone, requested_role: role } } }); if (error) throw error; showToast('Check your email for a secure sign-in link.', 'success'); };
+  const logout = async () => { if (supabase) { const { error } = await supabase.auth.signOut(); if (error) throw error; } setIsLoggedIn(false); setCurrentUserRole('buyer'); setCurrentUserId(undefined); setUserName(''); setUserPhone(''); setLeads([]); setSavedPropertyIds([]); showToast('Signed out successfully.', 'info'); };
+
+  const value: AppContextType = { currentPath, navigate, routeParams, properties, savedPropertyIds, toggleSaveProperty, isPropertySaved, addProperty, updateProperty, getPropertyBySlug: (slug) => properties.find((item) => item.slug === slug || item.id === slug || item.listingId.toLowerCase() === slug.toLowerCase()), getPropertyById: (id) => properties.find((item) => item.id === id || item.listingId === id), approveListing, rejectListing, requestChangesListing, updatePropertyVerification, toggleFeatured, toggleListingStatus, leads, addLead, updateLeadStatus, filters, setFilters, resetFilters: () => setFilters(DEFAULT_FILTERS), setQuickFilter: (updates) => setFilters({ ...DEFAULT_FILTERS, ...updates }), isSiteVisitOpen, openSiteVisitModal: (property) => { setSelectedPropertyForModal(property); setIsSiteVisitOpen(true); }, closeSiteVisitModal: () => setIsSiteVisitOpen(false), selectedPropertyForModal, isInquiryOpen, openInquiryModal: (property) => { setSelectedPropertyForModal(property); setIsInquiryOpen(true); }, closeInquiryModal: () => setIsInquiryOpen(false), isUnitConverterOpen, openUnitConverterModal: () => setIsUnitConverterOpen(true), closeUnitConverterModal: () => setIsUnitConverterOpen(false), isVerificationModalOpen, openVerificationModal: () => setIsVerificationModalOpen(true), closeVerificationModal: () => setIsVerificationModalOpen(false), isAuthModalOpen, openAuthModal: () => setIsAuthModalOpen(true), closeAuthModal: () => setIsAuthModalOpen(false), currentUserRole, setCurrentUserRole, currentUserId, isLoggedIn, isReady, userPhone, userName, signInWithEmail, logout, toasts, showToast };
+  return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 };
 
-export const useApp = () => {
-  const context = useContext(AppContext);
-  if (!context) {
-    throw new Error('useApp must be used within an AppProvider');
-  }
-  return context;
-};
+export const useApp = () => { const context = useContext(AppContext); if (!context) throw new Error('useApp must be used within an AppProvider'); return context; };

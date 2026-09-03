@@ -17,16 +17,17 @@ import { useApp } from '../../context/AppContext';
 import { formatIndianPrice } from '../../utils/formatters';
 
 export const SellerDashboard: React.FC = () => {
-  const { properties, leads, navigate, userName, userPhone } = useApp();
+  const { properties, leads, navigate, userName, currentUserId, isLoggedIn, openAuthModal } = useApp();
 
-  // For prototype, show all properties or seller properties
-  const myProperties = properties;
-  const myLeads = leads;
+  const myProperties = properties.filter((property) => property.sellerId === currentUserId);
+  const myLeads = leads.filter((lead) => myProperties.some((property) => property.id === lead.propertyId));
 
   const liveCount = myProperties.filter(p => p.listingStatus === 'live').length;
-  const pendingCount = myProperties.filter(p => p.listingStatus === 'pending_verification').length;
+  const pendingCount = myProperties.filter(p => p.listingStatus === 'under_review' || p.listingStatus === 'changes_requested').length;
   const visitsCount = myLeads.filter(l => l.leadType === 'site_visit').length;
   const inquiriesCount = myLeads.filter(l => l.leadType === 'inquiry').length;
+
+  if (!isLoggedIn) return <div className="max-w-2xl mx-auto px-4 py-20 text-center space-y-4"><h1 className="text-2xl font-bold text-slate-900">Sign in to manage your listings</h1><p className="text-slate-600">Your seller dashboard is private to your verified account.</p><button onClick={openAuthModal} className="px-5 py-2.5 bg-blue-600 text-white rounded-md font-semibold text-sm">Sign in securely</button></div>;
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">

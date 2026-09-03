@@ -28,13 +28,16 @@ export const AdminDashboard: React.FC = () => {
     updatePropertyVerification, 
     updateLeadStatus, 
     navigate, 
-    showToast 
+    showToast,
+    currentUserRole,
+    isLoggedIn,
+    openAuthModal,
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<'verification' | 'all_listings' | 'site_visits' | 'leads'>('verification');
   const [inspectionNoteInput, setInspectionNoteInput] = useState<Record<string, string>>({});
 
-  const pendingProperties = properties.filter(p => p.listingStatus === 'pending_verification' || p.verificationStatus === 'unverified');
+  const pendingProperties = properties.filter(p => p.listingStatus === 'under_review' || p.listingStatus === 'changes_requested' || p.verificationStatus === 'pending');
   const siteVisits = leads.filter(l => l.leadType === 'site_visit');
   const directInquiries = leads.filter(l => l.leadType === 'inquiry');
 
@@ -50,6 +53,9 @@ export const AdminDashboard: React.FC = () => {
   const handleReject = (propId: string) => {
     updatePropertyVerification(propId, 'rejected', 'Documentation mismatch or duplicate listing.');
   };
+
+  if (!isLoggedIn) return <div className="max-w-2xl mx-auto px-4 py-20 text-center space-y-4"><h1 className="text-2xl font-bold text-slate-900">Admin sign-in required</h1><p className="text-slate-600">This workspace is available only to accounts assigned the admin role.</p><button onClick={openAuthModal} className="px-5 py-2.5 bg-blue-600 text-white rounded-md font-semibold text-sm">Sign in securely</button></div>;
+  if (currentUserRole !== 'admin') return <div className="max-w-2xl mx-auto px-4 py-20 text-center space-y-3"><h1 className="text-2xl font-bold text-slate-900">Access restricted</h1><p className="text-slate-600">Your account does not have the Hazaribagh Properties administrator role.</p></div>;
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">

@@ -101,7 +101,7 @@ export const AddPropertyWizard: React.FC = () => {
     });
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!formData.title?.trim()) {
@@ -117,11 +117,11 @@ export const AddPropertyWizard: React.FC = () => {
     }
 
     // Submit as pending_verification
-    addProperty({
+    try {
+      await addProperty({
       ...formData,
-      listingStatus: 'pending_verification',
-      verificationStatus: 'unverified',
-      sellerId: 'user-seller-current',
+      listingStatus: 'under_review',
+      verificationStatus: 'pending',
       sellerName: userName || 'Property Owner',
       latitude: 23.9935,
       longitude: 85.3621,
@@ -129,10 +129,11 @@ export const AddPropertyWizard: React.FC = () => {
         { name: 'Hazaribagh Lake', distance: '1.2 km' },
         { name: 'DC Office', distance: '1.8 km' }
       ]
-    });
-
-    showToast('Listing submitted successfully! Our team will review title documents for verification.', 'success');
-    navigate('/dashboard');
+      });
+      navigate('/dashboard');
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Unable to submit this listing.', 'error');
+    }
   };
 
   const isPlot = formData.propertyType === 'plot' || formData.propertyType === 'commercial_land';

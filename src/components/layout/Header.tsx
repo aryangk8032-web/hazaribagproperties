@@ -149,15 +149,15 @@ export const Header: React.FC = () => {
             )}
           </button>
 
-          {/* User Account / Role dropdown */}
+          {/* User account */}
           <div className="relative">
             <button
-              onClick={() => setIsUserDropdownOpen(!isUserDropdownOpen)}
+              onClick={() => isLoggedIn ? setIsUserDropdownOpen(!isUserDropdownOpen) : openAuthModal()}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-slate-200 hover:border-slate-300 bg-white text-xs font-medium text-slate-800 transition-colors shadow-2xs"
             >
               <User size={14} className="text-slate-500" />
               <span className="hidden sm:inline-block max-w-[90px] truncate">
-                {currentUserRole === 'admin' ? 'Admin Portal' : currentUserRole === 'seller' ? 'Seller Hub' : 'My Account'}
+                {isLoggedIn ? (currentUserRole === 'admin' ? 'Admin Portal' : 'My Account') : 'Sign in'}
               </span>
               <ChevronDown size={13} className="text-slate-400" />
             </button>
@@ -184,13 +184,13 @@ export const Header: React.FC = () => {
                     <span className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-mono">Owner</span>
                   </button>
 
-                  <button
+                  {currentUserRole === 'admin' && <button
                     onClick={() => handleNav('/admin')}
                     className="w-full text-left px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 hover:text-slate-900 rounded-md flex items-center justify-between"
                   >
                     <span>Admin Verification</span>
                     <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-bold uppercase">Admin</span>
-                  </button>
+                  </button>}
 
                   <button
                     onClick={() => handleNav('/property-guides')}
@@ -210,10 +210,10 @@ export const Header: React.FC = () => {
 
                   <div className="border-t border-slate-100 pt-1 mt-1">
                     <button
-                      onClick={openAuthModal}
+                      onClick={() => { void logout(); setIsUserDropdownOpen(false); }}
                       className="w-full text-left px-3 py-2 text-xs font-semibold text-blue-600 hover:bg-blue-50 rounded-md flex items-center justify-between"
                     >
-                      <span>Switch Persona / Sign In</span>
+                      <span className="flex items-center gap-2"><LogOut size={13} /> Sign out</span>
                     </button>
                   </div>
                 </div>

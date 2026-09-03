@@ -8,13 +8,14 @@ export const InquiryModal: React.FC = () => {
 
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
   const [message, setMessage] = useState('');
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [error, setError] = useState('');
 
   if (!isInquiryOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent, isWhatsApp = false) => {
+  const handleSubmit = async (e: React.FormEvent, isWhatsApp = false) => {
     e.preventDefault();
     if (!name.trim()) {
       setError('Please enter your full name');
@@ -27,7 +28,8 @@ export const InquiryModal: React.FC = () => {
     }
 
     if (selectedPropertyForModal) {
-      addLead({
+      try {
+        await addLead({
         propertyId: selectedPropertyForModal.id,
         propertyTitle: selectedPropertyForModal.title,
         propertySlug: selectedPropertyForModal.slug,
@@ -35,10 +37,19 @@ export const InquiryModal: React.FC = () => {
         price: selectedPropertyForModal.price,
         buyerName: name.trim(),
         buyerPhone: `+91 ${cleanPhone.slice(-10)}`,
+        buyerEmail: email.trim() || undefined,
+        userName: name.trim(),
+        userPhone: `+91 ${cleanPhone.slice(-10)}`,
+        userEmail: email.trim() || undefined,
+        leadType: isWhatsApp ? 'whatsapp' : 'inquiry',
         inquiryType: isWhatsApp ? 'whatsapp' : 'general_inquiry',
         message: message.trim() || 'Requesting complete property details and pricing sheet.',
         status: 'new'
-      });
+        });
+      } catch (submissionError) {
+        setError(submissionError instanceof Error ? submissionError.message : 'Unable to submit your inquiry.');
+        return;
+      }
     }
 
     if (isWhatsApp) {
@@ -59,6 +70,7 @@ export const InquiryModal: React.FC = () => {
     setIsSubmitted(false);
     setName('');
     setPhone('');
+    setEmail('');
     setMessage('');
     setError('');
     closeInquiryModal();
@@ -80,6 +92,7 @@ export const InquiryModal: React.FC = () => {
               <h3 className="text-base font-bold text-white">Request Property Details</h3>
               <p className="text-xs text-slate-400">Directly from Hazaribagh Properties desk</p>
             </div>
+
           </div>
           <button
             onClick={handleClose}
@@ -143,7 +156,12 @@ export const InquiryModal: React.FC = () => {
                 className="w-full px-3 py-2 border border-slate-200 rounded-md text-xs text-slate-900 focus:outline-none focus:border-blue-600"
                 required
               />
-            </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Email for confirmation <span className="normal-case text-slate-400">(optional)</span></label>
+                <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" className="w-full px-3 py-2 border border-slate-200 rounded-md text-xs text-slate-900 focus:outline-none focus:border-blue-600" />
+              </div>
 
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">

@@ -14,13 +14,14 @@ export const SiteVisitModal: React.FC = () => {
   const [timeSlot, setTimeSlot] = useState<'morning' | 'afternoon' | 'evening'>('morning');
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
   const [notes, setNotes] = useState('');
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [error, setError] = useState('');
 
   if (!isSiteVisitOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) {
       setError('Please enter your full name');
@@ -33,7 +34,8 @@ export const SiteVisitModal: React.FC = () => {
     }
 
     if (selectedPropertyForModal) {
-      addLead({
+      try {
+        await addLead({
         propertyId: selectedPropertyForModal.id,
         propertyTitle: selectedPropertyForModal.title,
         propertySlug: selectedPropertyForModal.slug,
@@ -41,12 +43,21 @@ export const SiteVisitModal: React.FC = () => {
         price: selectedPropertyForModal.price,
         buyerName: name.trim(),
         buyerPhone: `+91 ${cleanPhone.slice(-10)}`,
+        buyerEmail: email.trim() || undefined,
+        userName: name.trim(),
+        userPhone: `+91 ${cleanPhone.slice(-10)}`,
+        userEmail: email.trim() || undefined,
+        leadType: 'site_visit',
         inquiryType: 'site_visit',
         preferredDate: date,
         preferredTimeSlot: timeSlot,
         message: notes.trim() || `Site visit requested for ${date} (${timeSlot})`,
         status: 'new'
-      });
+        });
+      } catch (submissionError) {
+        setError(submissionError instanceof Error ? submissionError.message : 'Unable to schedule the visit.');
+        return;
+      }
     }
 
     setIsSubmitted(true);
@@ -57,6 +68,7 @@ export const SiteVisitModal: React.FC = () => {
     setIsSubmitted(false);
     setName('');
     setPhone('');
+    setEmail('');
     setNotes('');
     setError('');
     closeSiteVisitModal();
@@ -239,6 +251,11 @@ export const SiteVisitModal: React.FC = () => {
                     required
                   />
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Email for confirmation <span className="normal-case text-slate-400">(optional)</span></label>
+                <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" className="w-full px-3 py-2 border border-slate-200 rounded-md text-xs text-slate-900 focus:outline-none focus:border-blue-600" />
               </div>
             </div>
 
